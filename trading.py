@@ -75,13 +75,14 @@ class Trading(Env):
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
 
         state = self.state
+        asset_before = self.eval(state[1], state[2])
 
         done = (self.i == 0)
         if not done:
             holdings = self._observations(state[1], state[2], self.price())[action]
             self.i -= 1
             self.state = np.hstack([[self.i, holdings[0], holdings[1]], self._history()])
-            reward = self.eval(*holdings) - self.eval(state[1], state[2])
+            reward = self.eval(*holdings) - asset_before
         else:
             holdings = self._observations(state[1], state[2], self.price())[2]
             self.state = np.hstack([[self.i, holdings[0], holdings[1]], self._history()])
