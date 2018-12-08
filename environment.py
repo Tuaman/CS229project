@@ -24,8 +24,7 @@ class Environment:
 		state.append(state_dict['remaining_trading_day'])
 		state.append(state_dict['price_history'])
 
-
-		return state
+		return np.array(state)
 
 	def step(self, action):
 

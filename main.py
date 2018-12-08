@@ -11,8 +11,7 @@ if __name__ == "__main__":
     # Iterate the game
     for e in range(episodes):
         # reset state in the beginning of each game
-        state = env.reset()
-        state = np.reshape(state, [1, 4])
+        state = env.state
         # time_t represents each frame of the game
         # Our goal is to keep the pole upright as long as possible until score of 500
         # the more time_t the more score
