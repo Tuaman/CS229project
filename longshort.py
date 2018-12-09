@@ -1,18 +1,21 @@
+import os
+
 import numpy as np
 import pandas as pd
 
+from dqn import DQNAgent
+from grapher import Grapher
+from gym import spaces
 from trading import Trading
 
-from gym import Env, spaces
-from dqn import DQNAgent
-
-EPISODES = 1000
+EPISODES = 10
 
 class Longshort(Trading):
     def __init__(self, symbol, cash=10000, window=30, span=100, start=None):
         super().__init__(symbol, cash, window, span, start)
 
         high = np.array([np.finfo(np.float32).max]*(self.window+3)) # TODO limit num remaining trading days
+        self.action_labels = ['LONG', 'SHORT']
         self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
 
@@ -76,6 +79,9 @@ if __name__ == '__main__':
         done = False
         batch_size = 64
 
+        title = env.symbol.upper()+' '+os.path.basename(__file__).split('.')[0]
+        grapher = Grapher(title, action_labels=env.action_labels)
+
         for e in range(EPISODES):
             print('training episode:', e, '\n')
             state = env.reset()
@@ -87,15 +93,22 @@ if __name__ == '__main__':
                 # reward = reward if not done else -10
                 next_state = np.reshape(next_state, [1, state_size])
                 agent.remember(state, action, reward, next_state, done)
+                # if e % 100 == 0:
+                grapher.add(state, action, reward)
+
                 state = next_state
                 # print(action, reward)
                 if done:
                     print("episode: {}/{}, score: {}, e: {:.5}"
                           .format(e, EPISODES, time, agent.epsilon))
                     break
-            if len(agent.memory) > batch_size:
-                agent.replay(batch_size)
-            if e % 10 == 0:
-                save_string = './save/' + stock_name + '_weights_with_fees.h5'
-                agent.save(save_string)
+                if len(agent.memory) > batch_size:
+                    agent.replay(batch_size)
+            # if e % 100 == 0:
+            save_string = './save/' + stock_name + '_weights_with_fees.h5'
+            agent.save(save_string)
+
+            grapher.show(ep=e, t=time, e=agent.epsilon)
+            grapher.reset()
+
 

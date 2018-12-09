@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from grapher import Grapher
 from gym import Env, spaces
 from dqn import DQNAgent
 
@@ -100,7 +101,6 @@ class Trading(Env):
         self.state = np.hstack([np.array([self.i, self.cash, 0]), self.history()])
         return self.state
 
-
 if __name__ == "__main__":
     env = Trading('amzn')
     state_size = env.observation_space.shape[0]
@@ -108,7 +108,9 @@ if __name__ == "__main__":
 
     agent = DQNAgent(state_size, action_size)
     done = False
-    batch_size = 64
+    batch_size = 32
+
+    grapher = Grapher(env.symbol.upper(), EPISODES)
 
     for e in range(EPISODES):
         state = env.reset()
@@ -120,6 +122,8 @@ if __name__ == "__main__":
             # reward = reward if not done else -10
             next_state = np.reshape(next_state, [1, state_size])
             agent.remember(state, action, reward, next_state, done)
+            grapher.add(state, action, reward)
+
             state = next_state
             if done:
                 print("episode: {}/{}, score: {}, e: {:.5}"
@@ -127,5 +131,8 @@ if __name__ == "__main__":
                 break
             if len(agent.memory) > batch_size:
                 agent.replay(batch_size)
+
+        grapher.show(ep=e, t=time, e=agent.epsilon)
+        grapher.reset()
         # if e % 10 == 0:
 # #     agent.save("./save/cartpole-dqn.h5")
