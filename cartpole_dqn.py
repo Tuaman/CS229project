@@ -38,6 +38,7 @@ class DQNAgent:
         if np.random.rand() <= self.epsilon:
             return random.randrange(self.action_size)
         act_values = self.model.predict(state)
+        print(act_values)
         return np.argmax(act_values[0])  # returns action
 
     def replay(self, batch_size):
@@ -49,6 +50,7 @@ class DQNAgent:
                           np.amax(self.model.predict(next_state)[0]))
             target_f = self.model.predict(state)
             target_f[0][action] = target
+            print(target)
             self.model.fit(state, target_f, epochs=1, verbose=0)
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
@@ -65,7 +67,7 @@ if __name__ == "__main__":
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
     agent = DQNAgent(state_size, action_size)
-    agent.load("./save/cartpole-dqn2.h5")
+    agent.load("./save/cartpole-dqn.h5")
     done = False
     batch_size = 32
 
@@ -85,6 +87,6 @@ if __name__ == "__main__":
                       .format(e, EPISODES, time, agent.epsilon))
                 break
             # if len(agent.memory) > batch_size:
-            #     agent.replay(batch_size)
+                 #  agent.replay(batch_size)
         # if e % 10 == 0:
         #     agent.save("./save/cartpole-dqn.h5")

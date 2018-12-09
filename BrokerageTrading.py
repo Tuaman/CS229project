@@ -1,8 +1,10 @@
+import argparse
 import numpy as np
 import pandas as pd
 
 from trading import Trading
 from dqn import DQNAgent
+from longshort import Longshort
 
 EPISODES = 10
 
@@ -29,7 +31,7 @@ class BrokerageTrading(Trading):
             - Profit Gain
 
     Starting State:
-        Initial prices in the first Window-day window
+        Initial prices in the first Window-day window,
         Number of Stock Owned   0
         Cash                    10000
 
@@ -102,7 +104,7 @@ if __name__ == "__main__":
 
     for stock_name in ['linear']:
         print('Start training for stock ' + stock_name + '...\n')
-        env = Trading(stock_name)
+        env = Longshort(stock_name, span=100)
         state_size = env.observation_space.shape[0]
         action_size = env.action_space.n
 

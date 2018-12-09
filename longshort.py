@@ -1,27 +1,33 @@
+import numpy as np
+import pandas as pd
+
+from trading import Trading
+from dqn import DQNAgent
+
 class Longshort(Trading):
-	def __init__(self, symbol, cash=10000, window=30, span=100, start=None):
-		super().__init__(symbol, cash, window, span, start)
+    def __init__(self, symbol, cash=10000, window=30, span=100, start=None):
+        super().__init__(symbol, cash, window, span, start)
 
-		self.action_space = spaces.Discrete(2)
+        self.action_space = spaces.Discrete(2)
 
-	def observation(self, cash, nown, p):
-		flat_rate = 5 #5 dollars per transaction
-		percent_rate = 0.005 # 0.5% fees
-		short_fee = 0.05/300 #per-day fees
+    def observation(self, cash, nown, p):
+        flat_rate = 5 #5 dollars per transaction
+        percent_rate = 0.005 # 0.5% fees
+        short_fee = 0.05/300 #per-day fees
 
-		cash_tot = cash + nown * p
+        cash_tot = cash + nown * p
         n_short = np.floor(cash_tot/p)
         n_long = n_short
 
-		fee_short = int(nown == -n_short) * (flat_rate + abs(n_short - nown) * percent_rate)
+        fee_short = int(nown == -n_short) * (flat_rate + abs(n_short - nown) * percent_rate)
         fee_long = int(nown == n_long) * (flat_rate + abs(n_long - nown) * percent_rate)
         while cash_tot-p*n_long-fee_long < 0:
-        	n_long -= 1
-        	fee_long = int(nown == n_long) * (flat_rate + abs(n_long - nown) * percent_rate)
+            n_long -= 1
+            fee_long = int(nown == n_long) * (flat_rate + abs(n_long - nown) * percent_rate)
 
         return np.array([
-            [cash-p*n_long-fee_long, 	 n], # LONG
-            [cash+p*n_short-fee_short, 	-n], # SHORT
+            [cash-p*n_long-fee_long,     n], # LONG
+            [cash+p*n_short-fee_short,  -n], # SHORT
         ])
 
     def step(self, action):
