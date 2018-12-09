@@ -4,7 +4,7 @@ class Longshort(Trading):
 
 		self.action_space = spaces.Discrete(2)
 
-	def _observation(self, cash, nown, p):
+	def observation(self, cash, nown, p):
 		flat_rate = 5 #5 dollars per transaction
 		percent_rate = 0.005 # 0.5% fees
 		short_fee = 0.05/300 #per-day fees
@@ -31,13 +31,13 @@ class Longshort(Trading):
 
         done = (self.i == 0)
         if not done:
-            holdings = self._observations(state[1], state[2], self.price())[action]
+            holdings = self.observations(state[1], state[2], self.price())[action]
             self.i -= 1
-            self.state = np.hstack([[self.i, holdings[0], holdings[1]], self._history()])
+            self.state = np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
             reward = self.eval(*holdings) - self.eval(state[1], state[2])
         else:
             holdings = [state[1] + state[2] * self.price, 0] # sell all
-            self.state = np.hstack([[self.i, holdings[0], holdings[1]], self._history()])
+            self.state = np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
             print('start', self.start, self.i, 'previous', (state[1], state[2]), 'current', holdings)
             reward = 0.0
 

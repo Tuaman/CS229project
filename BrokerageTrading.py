@@ -40,12 +40,12 @@ class BrokerageTrading(Trading):
     """
 
 
-    def _history(self):
+    def history(self):
         return self.stock['Close'][self.today()-self.window:self.today()]
         # np.diff(self.stock['Close'][self.today()-self.window-1:self.today()])/ \
                         # self.stock['Close'][self.today()-self.window:self.today()]
 
-    def _observations(self, cash, nown, p):
+    def observations(self, cash, nown, p):
         flat_rate = 0.0 #5 dollars per transaction
         percent_rate = 0.0 #0.5% fees
 
@@ -71,16 +71,16 @@ class BrokerageTrading(Trading):
 
         done = (self.i == 0)
         if not done:
-            holdings = self._observations(state[1], state[2], self.price())[action]
+            holdings = self.observations(state[1], state[2], self.price())[action]
             self.i -= 1
-            self.state = np.hstack([[self.i, holdings[0], holdings[1]], self._history()])
+            self.state = np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
             reward = self.eval(*holdings) - asset_before
             if reward == 0: reward = -2
             print('start', self.start, self.i, 'previous', (state[1], state[2]), 'current', holdings, 'action', action, 'reward', reward)
 
         else:
-            holdings = self._observations(state[1], state[2], self.price())[2]
-            self.state = np.hstack([[self.i, holdings[0], holdings[1]], self._history()])
+            holdings = self.observations(state[1], state[2], self.price())[2]
+            self.state = np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
             print('start', self.start, self.i, 'previous', (state[1], state[2]), 'current', holdings)
             reward = 0.0
 
