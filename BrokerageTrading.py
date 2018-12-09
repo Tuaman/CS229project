@@ -75,7 +75,7 @@ class BrokerageTrading(Trading):
             self.i -= 1
             self.state = np.hstack([[self.i, holdings[0], holdings[1]], self._history()])
             reward = self.eval(*holdings) - asset_before
-            if reward == 0: reward = -2 
+            if reward == 0: reward = -2
             print('start', self.start, self.i, 'previous', (state[1], state[2]), 'current', holdings, 'action', action, 'reward', reward)
 
         else:
@@ -89,11 +89,11 @@ class BrokerageTrading(Trading):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--list',
-                    const='all',
-                    nargs='?',
-                    choices=['train, test'])
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--list',
+    #                 const='all',
+    #                 nargs='?',
+    #                 choices=['train, test'])
 
     #parser.add_argument("test")
     # args = parser.parse_args()

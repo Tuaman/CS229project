@@ -63,9 +63,9 @@ class Trading(Env):
     def _observations(self, cash, nown, p):
         n = np.floor(cash/p)
         return np.array([
-            [cash-p*n,      nown+n], # BUY
-            [cash,          nown],   # HOLD
-            [cash+p*nown, 0],        # SELL
+            [cash-p*n,    nown+n], # BUY
+            [cash,        nown],   # HOLD
+            [cash+p*nown, 0],      # SELL
         ])
 
     def price(self):
