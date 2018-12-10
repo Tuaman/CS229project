@@ -8,8 +8,7 @@ class Grapher:
         self.action_labels = action_labels
         self.reset()
 
-    def add(self, state, action, reward, date=None):
-        cash, nown, price = state[0, 1], state[0, 2], state[0, -1]
+    def add(self, cash, nown, price, action, reward, date=None, **kwarg):
         self.points.append((cash, nown, price, action, reward, date or len(self.points)))
 
     def plot_interactions(self, ax1, dates, prices, actions, rewards):

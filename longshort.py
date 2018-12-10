@@ -94,7 +94,8 @@ if __name__ == '__main__':
                 next_state = np.reshape(next_state, [1, state_size])
                 agent.remember(state, action, reward, next_state, done)
                 # if e % 100 == 0:
-                grapher.add(state, action, reward)
+                cash, nown, price = state[0, 1], state[0, 2], state[0, -1]
+                grapher.add(cash, nown, price, action, reward)
 
                 state = next_state
                 # print(action, reward)

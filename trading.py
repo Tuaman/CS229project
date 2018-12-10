@@ -122,7 +122,9 @@ if __name__ == "__main__":
             # reward = reward if not done else -10
             next_state = np.reshape(next_state, [1, state_size])
             agent.remember(state, action, reward, next_state, done)
-            grapher.add(state, action, reward)
+
+            cash, nown, price = state[0, 1], state[0, 2], state[0, -1]
+            grapher.add(cash, nown, price, action, reward)
 
             state = next_state
             if done:
