@@ -9,7 +9,7 @@ from gym import spaces
 from trading import Trading
 
 
-EPISODES = 1000
+EPISODES = 5000
 
 
 class Longshort(Trading):
@@ -56,6 +56,30 @@ class Longshort(Trading):
             [cash_tot+p*n_short-fee_short,  -n_short], # SHORT
         ])
 
+    def step(self, action):
+        assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
+
+        state = self.state
+        holdings = self.holdings
+        asset_before = self.eval(*self.holdings)
+        price = self.price()
+
+        done = (self.i == 0)
+        if not done:
+            # print(self.observations(state[1], state[2], self.price()))
+            self.holdings = self.observations(*self.holdings, self.price())[action]
+            self.i -= 1
+            self.state = self.get_state()
+            reward = self.eval(*self.holdings) - asset_before
+            if self.i % 20 == 0:
+                print(self.i, 'price', price, 'previous', holdings, 'current', self.holdings, 'action', action, 'reward', reward)
+        else:
+            self.holdings = [self.holdings[0] + self.holdings[1] * self.price(), 0] # sell all
+            self.state = self.get_state()
+            reward = 0.0
+
+        return np.array(self.state), reward, done, {}
+
 
 if __name__ == '__main__':
     for stock_name in ['sine_50days']:
@@ -66,9 +90,9 @@ if __name__ == '__main__':
         action_size = env.action_space.n
 
         agent = DQNAgent(state_size, action_size)
-        #agent.save("./save/blank_trading.h5")
-        # load_string = './save/' + stock_name + '_weights_without_fees.h5'
-        #agent.load(load_string)
+        # agent.save("./save/blank_trading.h5")
+        save_string = './save/' + stock_name + '_weights_without_fees_v4.h5'
+        agent.load(save_string)
         done = False
         batch_size = 64
 
@@ -81,13 +105,15 @@ if __name__ == '__main__':
             for time in range(500):
                 cash, nown, price = env.holdings[0], env.holdings[1], env.state[-1]
                 # env.render()
-                action = agent.act(state)
+                action = agent.act(state, time)
                 next_state, reward, done, _ = env.step(action)
-                # reward = reward if not done else -10
                 next_state = np.reshape(next_state, [1, state_size])
                 agent.remember(state, action, reward, next_state, done)
-                if e % 50 == 0:
+                if e % 25 == 0:
+                    #cash, nown, price = state[0, 1], state[0, 2], state[0, -1]
+                    # cash, nown, price = *env.holdings, state[0,-1]
                     grapher.add(cash, nown, price, action, reward)
+                    print(action, reward)
 
                 agent.train(state, action, reward, next_state, done)
                 state = next_state
@@ -95,12 +121,9 @@ if __name__ == '__main__':
                     print('start', env.start, 'previous', (cash, nown), 'current', tuple(env.holdings))
                     print("episode: {}/{}, score: {}, e: {:.5}"
                           .format(e, EPISODES, time, agent.epsilon))
-                    if e % 50 == 0:
+                    if e % 25 == 0:
                         grapher.show(ep=e, t=time, e=agent.epsilon)
                         grapher.reset()
+                        agent.save(save_string)
                     break
 
-                #if len(agent.memory) > batch_size:
-            if e % 100 == 0:
-                save_string = './save/' + stock_name + '_weights_without_fees.h5'
-                agent.save(save_string)
