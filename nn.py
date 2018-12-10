@@ -122,7 +122,7 @@ if __name__ == "__main__":
     trader = supervised_learning(stock_name)
     save_string = './save/supervised' + stock_name +'.h5'
     trader.load(save_string)
-    trader.train(50)
+    #trader.train(50)
     final_net_worth = trader.trade()
     trader.save(save_string)
     print("final_net_worth = ", final_net_worth)
