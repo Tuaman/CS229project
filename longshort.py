@@ -8,13 +8,15 @@ from grapher import Grapher
 from gym import spaces
 from trading import Trading
 
-EPISODES = 10
+
+EPISODES = 1000
+
 
 class Longshort(Trading):
     def __init__(self, symbol, cash=10000, window=30, span=100, start=None):
         super().__init__(symbol, cash, window, span, start)
 
-        high = np.array([np.finfo(np.float32).max]*(self.window+3)) # TODO limit num remaining trading days
+        high = np.array([np.finfo(np.float32).max]*(self.window)) # TODO limit num remaining trading days
         self.action_labels = ['LONG', 'SHORT']
         self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
@@ -45,37 +47,38 @@ class Longshort(Trading):
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
 
         state = self.state
-        asset_before = self.eval(state[1], state[2])
+        holdings = self.holdings
+        asset_before = self.eval(*self.holdings)
+        price = self.price()
 
         done = (self.i == 0)
         if not done:
             # print(self.observations(state[1], state[2], self.price()))
-            holdings = self.observations(state[1], state[2], self.price())[action]
+            self.holdings = self.observations(*self.holdings, self.price())[action]
             self.i -= 1
-            self.state = np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
-            reward = self.eval(*holdings) - asset_before
-            # print('start', self.start, self.i, 'previous', (state[1], state[2]), 'current', holdings, 'action', action, 'reward', reward)
-
+            self.state = self.history().values #np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
+            reward = self.eval(*self.holdings) - asset_before
+            # print(self.i, 'price', price, 'previous', (state[1], state[2]), 'current', holdings, 'action', action, 'reward', reward)
         else:
-            holdings = [state[1] + state[2] * self.price(), 0] # sell all
-            self.state = np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
-            print('start', self.start, self.i, 'previous', (state[1], state[2]), 'current', holdings)
+            self.holdings = [self.holdings[0] + self.holdings[1] * self.price(), 0] # sell all
+            self.state = self.history().values #np.hstack([[self.i, self.holdings[0], self.holdings[1]], self.history()])
+            print('start', self.start, self.i, 'previous', (holdings[0], holdings[1]), 'current', self.holdings)
             reward = 0.0
 
         return np.array(self.state), reward, done, {}
 
 
 if __name__ == '__main__':
-    for stock_name in ['linear']:
+    for stock_name in ['sine_50days']:
         print('Start training for stock ' + stock_name + '...\n')
-        env = Longshort(stock_name, span=100)
+        env = Longshort(stock_name, window = 2, span=100)
         state_size = env.observation_space.shape[0]
         action_size = env.action_space.n
 
         agent = DQNAgent(state_size, action_size)
         #agent.save("./save/blank_trading.h5")
-        load_string = './save/' + stock_name + '_weights_with_fees.h5'
-        # agent.load(load_string)
+        load_string = './save/' + stock_name + '_weights_without_fees.h5'
+        #agent.load(load_string)
         done = False
         batch_size = 64
 
@@ -94,22 +97,20 @@ if __name__ == '__main__':
                 next_state = np.reshape(next_state, [1, state_size])
                 agent.remember(state, action, reward, next_state, done)
                 # if e % 100 == 0:
-                cash, nown, price = state[0, 1], state[0, 2], state[0, -1]
-                grapher.add(cash, nown, price, action, reward)
-
+                # cash, nown, price = state[0, 1], state[0, 2], state[0, -1]
+                # grapher.add(cash, nown, price, action, reward)
+                this_state = state
                 state = next_state
                 # print(action, reward)
                 if done:
                     print("episode: {}/{}, score: {}, e: {:.5}"
                           .format(e, EPISODES, time, agent.epsilon))
                     break
-                if len(agent.memory) > batch_size:
-                    agent.replay(batch_size)
-            # if e % 100 == 0:
-            save_string = './save/' + stock_name + '_weights_with_fees.h5'
-            agent.save(save_string)
+                #if len(agent.memory) > batch_size:
+                agent.train(this_state, action, reward, next_state, done)
+            if e % 100 == 0:
+                save_string = './save/' + stock_name + '_weights_without_fees.h5'
+                agent.save(save_string)
 
-            grapher.show(ep=e, t=time, e=agent.epsilon)
-            grapher.reset()
-
-
+                # grapher.show(ep=e, t=time, e=agent.epsilon)
+                # grapher.reset()

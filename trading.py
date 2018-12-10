@@ -43,13 +43,14 @@ class Trading(Env):
     def __init__(self, symbol, cash=10000, window=30, span=300, start=None):
         self.symbol = symbol
         self.stock = pd.read_csv('data/'+symbol+'.us.csv')
+        self.holdings = [cash, 0]
 
         self.span = span
         self.window = window
         self.cash = cash
 
-        low = np.zeros(self.window+3)
-        high = np.array([np.finfo(np.float32).max]*(self.window+3)) # TODO limit num remaining trading days
+        low = np.zeros(self.window)
+        high = np.array([np.finfo(np.float32).max]*(self.window)) # TODO limit num remaining trading days
         self.action_space = spaces.Discrete(3)
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
 
@@ -79,18 +80,18 @@ class Trading(Env):
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
 
         state = self.state
-        asset_before = self.eval(state[1], state[2])
+        asset_before = self.eval(*self.holdings)
 
         done = (self.i == 0)
         if not done:
-            holdings = self.observations(state[1], state[2], self.price())[action]
+            self.holdings = self.observations(self.holdings[0], self.holdings[1], self.price())[action]
             self.i -= 1
-            self.state = np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
+            self.state = self.history() #np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
             reward = self.eval(*holdings) - asset_before
         else:
-            holdings = self.observations(state[1], state[2], self.price())[2]
-            self.state = np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
-            print('start', self.start, self.i, 'previous', (state[1], state[2]), 'current', holdings)
+            self.holdings = self.observations(*self.holdings, self.price())[2]
+            self.state = self.state = self.history() #np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
+            print('start', self.start, self.i, 'previous', (self.holdings[0], self.holdings[1]), 'current', self.holdings)
             reward = 0.0
 
         return np.array(self.state), reward, done, {}
@@ -98,7 +99,8 @@ class Trading(Env):
     def reset(self):
         self.i = self.span
         self.start = np.random.randint(self.window, self.stock.shape[0]-self.span)
-        self.state = np.hstack([np.array([self.i, self.cash, 0]), self.history()])
+        self.state = self.history().values #np.hstack([np.array([self.i, self.cash, 0]), self.history()])
+        self.holdings = [self.cash, 0]
         return self.state
 
 if __name__ == "__main__":

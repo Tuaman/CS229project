@@ -21,7 +21,7 @@ class supervised_learning(Model):
         self.span = span
         self.window = window
         self.start = start
-        self.learning_rate = 0.005
+        self.learning_rate = 0.001
         self.stock = pd.read_csv('data/'+symbol+'.us.csv')
         self.state = None
         self.model = self._build_model()
@@ -40,6 +40,8 @@ class supervised_learning(Model):
         model = Sequential()
         model.add(Dense(24, input_dim=self.window, activation='relu'))
         model.add(Dense(24, activation='relu'))
+        # model.add(Dense(12, activation='relu'))
+        # model.add(Dense(12, activation='relu'))
         model.add(Dense(1, activation='linear'))
         model.compile(loss='mse',
                       optimizer=Adam(lr=self.learning_rate))
@@ -96,6 +98,7 @@ class supervised_learning(Model):
                 action = 'short'
             print('today_price', self.price(), 'predict_price', predict_price, \
                 'holding', self.holdings, 'action:', action, 'net_worth:', self.net_worth())
+        
             self.today += 1
         return self.net_worth()
 
@@ -104,6 +107,7 @@ class supervised_learning(Model):
         self.today = self.start
         self.end = self.stock.shape[0]-self.span
         self.state = self.history()
+        # self.model = self._build_model()
         return self.state
 
     def load(self, name):
@@ -117,10 +121,10 @@ if __name__ == "__main__":
     stock_name = 'sine_50days'
     trader = supervised_learning(stock_name)
     save_string = './save/supervised' + stock_name +'.h5'
-    #trader.load(save_string)
-    trader.train(1)
+    trader.load(save_string)
+    trader.train(50)
     final_net_worth = trader.trade()
-    #trader.save(save_string)
+    trader.save(save_string)
     print("final_net_worth = ", final_net_worth)
 
 
