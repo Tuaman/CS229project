@@ -43,27 +43,38 @@ class Trading(Env):
     def __init__(self, symbol, cash=10000, window=30, span=300, start=None):
         self.symbol = symbol
         self.stock = pd.read_csv('data/'+symbol+'.us.csv')
-        self.holdings = [cash, 0]
-
-        self.span = span
+        self.init = {'span': span, 'cash': cash}
         self.window = window
-        self.cash = cash
 
-        low = np.zeros(self.window)
-        high = np.array([np.finfo(np.float32).max]*(self.window)) # TODO limit num remaining trading days
-        self.action_space = spaces.Discrete(3)
+        self.action_labels = ['BUY', 'HOLD', 'SELL']
+        self.action_space = spaces.Discrete(len(self.action_labels))
+        self.done_action = self.action_labels.index('SELL')
+
+        low = np.zeros(self.window+3)
+        high = np.array([np.finfo(np.float32).max]*(self.window+3)) # TODO limit num remaining trading days
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
+
 
         self.state = None
 
+    def get_state(self, i=None, cash=None, nown=None):
+        i    = i    or self.i
+        cash = cash or self.holdings[0]
+        nown = nown or self.holdings[1]
+
+        state = np.hstack([[i, cash, nown], self.history()])
+        assert self.observation_space.shape[0] == state.shape[0], "%d (expected %d) invalid state size"%(state.shape[0], self.observation_space.shape[0])
+
+        return state
+
     def today(self):
-        return self.start+self.span-self.i
+        return self.start+self.init['span']-self.i
 
     def price(self):
         return self.stock['Close'][self.today()]
 
     def history(self):
-        return self.stock['Close'][self.today()-self.window:self.today()]
+        return self.stock['Close'][self.today()-self.window:self.today()].values
 
     def observations(self, cash, nown, p):
         n = np.floor(cash/p)
@@ -79,28 +90,30 @@ class Trading(Env):
     def step(self, action):
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
 
-        state = self.state
         asset_before = self.eval(*self.holdings)
-
         done = (self.i == 0)
         if not done:
-            self.holdings = self.observations(self.holdings[0], self.holdings[1], self.price())[action]
             self.i -= 1
-            self.state = self.history() #np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
-            reward = self.eval(*holdings) - asset_before
         else:
-            self.holdings = self.observations(*self.holdings, self.price())[2]
-            self.state = self.state = self.history() #np.hstack([[self.i, holdings[0], holdings[1]], self.history()])
-            print('start', self.start, self.i, 'previous', (self.holdings[0], self.holdings[1]), 'current', self.holdings)
-            reward = 0.0
+            action = self.done_action
+
+        self.holdings = self.observations(self.holdings[0], self.holdings[1], self.price())[action]
+        self.state = self.get_state()
+
+        if not done:
+            reward = self.eval(*self.holdings) - asset_before
+        else:
+            reward = 0
 
         return np.array(self.state), reward, done, {}
 
     def reset(self):
-        self.i = self.span
-        self.start = np.random.randint(self.window, self.stock.shape[0]-self.span)
-        self.state = self.history().values #np.hstack([np.array([self.i, self.cash, 0]), self.history()])
-        self.holdings = [self.cash, 0]
+        # Internal states
+        self.i = self.init['span']
+        self.holdings = np.array([self.init['cash'], 0])
+
+        self.start = np.random.randint(self.window, self.stock.shape[0]-self.init['span'])
+        self.state = self.get_state()
         return self.state
 
 if __name__ == "__main__":
@@ -112,31 +125,32 @@ if __name__ == "__main__":
     done = False
     batch_size = 32
 
-    grapher = Grapher(env.symbol.upper(), EPISODES)
+    title = env.symbol.upper()+' '+os.path.basename(__file__).split('.')[0]
+    grapher = Grapher(env.symbol.upper(), env.action_labels)
 
     for e in range(EPISODES):
         state = env.reset()
         state = np.reshape(state, [1, state_size])
         for time in range(500):
+            cash, nown, price = env.holdings[0], env.holdings[1], env.state[-1]
             # env.render()
             action = agent.act(state)
             next_state, reward, done, _ = env.step(action)
             # reward = reward if not done else -10
             next_state = np.reshape(next_state, [1, state_size])
             agent.remember(state, action, reward, next_state, done)
-
-            cash, nown, price = state[0, 1], state[0, 2], state[0, -1]
             grapher.add(cash, nown, price, action, reward)
 
             state = next_state
             if done:
+                print('start', env.start, 'previous', (cash, nown), 'current', tuple(env.holdings))
                 print("episode: {}/{}, score: {}, e: {:.5}"
                       .format(e, EPISODES, time, agent.epsilon))
+                grapher.show(ep=e, t=time, e=agent.epsilon)
+                grapher.reset()
                 break
             if len(agent.memory) > batch_size:
                 agent.replay(batch_size)
 
-        grapher.show(ep=e, t=time, e=agent.epsilon)
-        grapher.reset()
         # if e % 10 == 0:
 # #     agent.save("./save/cartpole-dqn.h5")
