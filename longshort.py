@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from dqn import DQNAgent
 from grapher import Grapher
@@ -9,7 +10,7 @@ from gym import spaces
 from trading import Trading
 
 
-EPISODES = 5000
+EPISODES = 2000
 
 
 class Longshort(Trading):
@@ -57,6 +58,11 @@ class Longshort(Trading):
         ])
 
     def step(self, action):
+        # steps:
+        # 1. Calculate asset before trading
+        # 2. Take action by reallocating the asset using the price of today
+        # 3. Move on to the next day, then calculate reward
+        # 4. Get new state, then return state, reward, done
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
 
         state = self.state
@@ -64,20 +70,18 @@ class Longshort(Trading):
         asset_before = self.eval(*self.holdings)
         price = self.price()
 
-        done = (self.i == 0)
-        if not done:
-            # print(self.observations(state[1], state[2], self.price()))
-            self.holdings = self.observations(*self.holdings, self.price())[action]
-            self.i -= 1
-            self.state = self.get_state()
-            reward = self.eval(*self.holdings) - asset_before
-            if self.i % 20 == 0:
-                print(self.i, 'price', price, 'previous', holdings, 'current', self.holdings, 'action', action, 'reward', reward)
-        else:
-            self.holdings = [self.holdings[0] + self.holdings[1] * self.price(), 0] # sell all
-            self.state = self.get_state()
-            reward = 0.0
-
+        done = (self.i == 1)
+        self.holdings = self.observations(*self.holdings, self.price())[action]
+        self.i -= 1
+        self.state = self.get_state()
+        reward = self.eval(*self.holdings) - asset_before
+        if self.i % 20 == 0:
+            print(self.i, 'price', price, 'previous', holdings, 'current', self.holdings, 'action', action, 'reward', reward)
+        
+        # else:
+        #     self.holdings = [self.holdings[0] + self.holdings[1] * self.price(), 0] # sell all
+        #     self.state = self.get_state()
+        #     reward = 0.0
         return np.array(self.state), reward, done, {}
 
 
@@ -85,45 +89,58 @@ if __name__ == '__main__':
     for stock_name in ['sine_50days']:
         print('Start training for stock ' + stock_name + '...\n')
 
-        env = Longshort(stock_name, window=2, span=100)
+        env = Longshort(stock_name, window=30, span=100)
         state_size = env.observation_space.shape[0]
         action_size = env.action_space.n
 
         agent = DQNAgent(state_size, action_size)
-        # agent.save("./save/blank_trading.h5")
-        save_string = './save/' + stock_name + '_weights_without_fees_v4.h5'
-        agent.load(save_string)
+        save_string = './save/' + stock_name + '_weights_without_fees_test.h5'
+        #agent.load(save_string)
         done = False
         batch_size = 64
 
-        title = env.symbol.upper()+' '+os.path.basename(__file__).split('.')[0]
+        title = env.symbol.upper()+' MDP '+os.path.basename(__file__).split('.')[0]
         grapher = Grapher(title, action_labels=env.action_labels)
 
-        for e in range(EPISODES):
-            state = env.reset()
-            state = np.reshape(state, [1, state_size])
-            for time in range(500):
-                cash, nown, price = env.holdings[0], env.holdings[1], env.state[-1]
-                # env.render()
-                action = agent.act(state, time)
-                next_state, reward, done, _ = env.step(action)
-                next_state = np.reshape(next_state, [1, state_size])
-                agent.remember(state, action, reward, next_state, done)
-                if e % 25 == 0:
-                    #cash, nown, price = state[0, 1], state[0, 2], state[0, -1]
-                    # cash, nown, price = *env.holdings, state[0,-1]
-                    grapher.add(cash, nown, price, action, reward)
-                    print(action, reward)
-
-                agent.train(state, action, reward, next_state, done)
-                state = next_state
-                if done:
-                    print('start', env.start, 'previous', (cash, nown), 'current', tuple(env.holdings))
-                    print("episode: {}/{}, score: {}, e: {:.5}"
-                          .format(e, EPISODES, time, agent.epsilon))
+        with open('./save/losses_'+stock_name+'.txt', 'w') as f:
+            # plt.axis([0, 10, 0, 1])
+            for e in range(EPISODES):
+                state = env.reset()
+                state = np.reshape(state, [1, state_size])
+                for time in range(500):
+                    cash, nown, price = env.holdings[0], env.holdings[1], env.state[-1]
+                    # env.render()
+                    action = agent.act(state, time)
+                    next_state, reward, done, _ = env.step(action)
+                    next_state = np.reshape(next_state, [1, state_size])
+                    agent.remember(state, action, reward, next_state, done)
+                    agent.train(state, action, reward, next_state, done)
                     if e % 25 == 0:
-                        grapher.show(ep=e, t=time, e=agent.epsilon)
-                        grapher.reset()
-                        agent.save(save_string)
-                    break
+                        #cash, nown, price = state[0, 1], state[0, 2], state[0, -1]
+                        # cash, nown, price = *env.holdings, state[0,-1]
+                        grapher.add(cash, nown, price, action, reward, loss=agent.loss)
+                        #print(action, reward)
+
+                    state = next_state
+                    if done:
+                        print('start', env.start, 'previous', (cash, nown), 'current', tuple(env.holdings))
+                        print("episode: {}/{}, score: {}, e: {:.5}"
+                              .format(e, EPISODES, time, agent.epsilon))
+                        print('average_loss =', agent.loss/env.init['span'])
+                        f.write(str(agent.loss)+'\n')
+                        f.flush()
+                        agent.loss = 0
+                        if e % 25 == 0:
+                            grapher.show(ep=e, t=time, e=agent.epsilon)
+                            grapher.reset()
+                            agent.save(save_string)
+                        break
+                    # if len(agent.memory) > batch_size:
+                    #     agent.replay(batch_size)
+
+
+        #     plt.plot(losses)
+        #     plt.pause(0.05)
+        # plt.show()
+
 
