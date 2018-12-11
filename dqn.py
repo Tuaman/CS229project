@@ -15,20 +15,23 @@ class DQNAgent:
         self.state_size = state_size
         self.action_size = action_size
         self.memory = deque(maxlen=2000)
-        self.gamma = 0.99    # discount rate
-        self.epsilon = 1.0  # exploration rate
+        self.gamma = 0.9   # discount rate
+        self.epsilon = 1.0 # exploration rate
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.9999
-        self.learning_rate = 0.005
+        self.epsilon_decay = 0.99995
+        self.learning_rate = 0.0001
         self.model = self._build_model()
+        self.loss = 0
 
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
         model = Sequential()
-        model.add(Dense(12, input_dim=self.state_size, activation='relu'))
-        model.add(Dense(12, activation='relu'))
-        model.add(Dense(12, activation='relu'))
-        model.add(Dense(12, activation='relu'))
+        model.add(Dense(24, input_dim=self.state_size, activation='relu'))
+        model.add(Dense(24, activation='relu'))
+        model.add(Dense(24, activation='relu'))
+        model.add(Dense(24, activation='relu'))
+        model.add(Dense(24, activation='relu'))
+        model.add(Dense(24, activation='relu'))
         model.add(Dense(self.action_size, activation='linear'))
         model.compile(loss='mse',
                       optimizer=Adam(lr=self.learning_rate))
@@ -38,11 +41,12 @@ class DQNAgent:
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
 
-    def act(self, state):
+    def act(self, state, i = None):
         if np.random.rand() <= self.epsilon:
             return random.randrange(self.action_size)
         act_values = self.model.predict(state)
-        #print(act_values)
+        if i is not None and i % 20 == 0:
+            print(act_values)
         return np.argmax(act_values[0])  # returns action
 
     def replay(self, batch_size):
@@ -53,21 +57,27 @@ class DQNAgent:
                 target = (reward + self.gamma *
                           np.amax(self.model.predict(next_state)[0]))
             target_f = self.model.predict(state)
+            predict = target_f[0][action]
             target_f[0][action] = target
             self.model.fit(state, target_f, epochs=1, verbose=0)
+            #self.loss += (predict - target)**2
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
     def train(self, state, action, reward, next_state, done):
-        target = reward
-        if not done:
-            target = (reward + self.gamma *
-                      np.amax(self.model.predict(next_state)[0]))
+        #target = reward
+        #if not done:
+        target = (reward + self.gamma *
+                  np.amax(self.model.predict(next_state)[0]))
         target_f = self.model.predict(state)
+        predict = target_f[0][action]
         target_f[0][action] = target
         self.model.fit(state, target_f, epochs=1, verbose=0)
+        self.loss += (predict - target)**2
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+
+    def test(self):
 
     def load(self, name):
         self.model.load_weights(name)
@@ -80,7 +90,7 @@ if __name__ == "__main__":
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
     agent = DQNAgent(state_size, action_size)
-    # agent.load("./save/cartpole-dqn.h5")
+    #agent.load("./save/cartpole-dqn.h5")
     done = False
     batch_size = 32
 
