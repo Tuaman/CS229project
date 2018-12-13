@@ -1,4 +1,5 @@
 import os
+import time as bed
 
 import numpy as np
 import pandas as pd
@@ -10,7 +11,7 @@ from gym import spaces
 from trading import Trading
 
 
-EPISODES = 2000
+EPISODES = 200
 
 
 class Longshort(Trading):
@@ -77,7 +78,7 @@ class Longshort(Trading):
         reward = self.eval(*self.holdings) - asset_before
         if self.i % 20 == 0:
             print(self.i, 'price', price, 'previous', holdings, 'current', self.holdings, 'action', action, 'reward', reward)
-        
+
         # else:
         #     self.holdings = [self.holdings[0] + self.holdings[1] * self.price(), 0] # sell all
         #     self.state = self.get_state()
@@ -86,25 +87,31 @@ class Longshort(Trading):
 
 
 if __name__ == '__main__':
-    for stock_name in ['sine_50days']:
+    for stock_name in ['grpn']:
         print('Start training for stock ' + stock_name + '...\n')
+        stock = pd.read_csv('data/'+stock_name+'.us.csv')
 
-        env = Longshort(stock_name, window=30, span=100)
+        span = 300
+        window = 100
+
+        test_env = Longshort(stock_name, window=window, span=span, start=stock.shape[0]-2*span-1)
+        env = Longshort(stock_name, window=window, span=span)
         state_size = env.observation_space.shape[0]
         action_size = env.action_space.n
 
-        agent = DQNAgent(state_size, action_size)
+        replay_agent = DQNAgent(state_size, action_size) # model_replay = None
+        agent = DQNAgent(state_size, action_size, model_replay=replay_agent)
         save_string = './save/' + stock_name + '_weights_without_fees_test.h5'
-        #agent.load(save_string)
+        # agent.load(save_string)
         done = False
-        batch_size = 64
+        batch_size = 32
 
-        title = env.symbol.upper()+' MDP '+os.path.basename(__file__).split('.')[0]
-        grapher = Grapher(title, action_labels=env.action_labels)
+        title = env.symbol.upper()+' MDP Replay '+os.path.basename(__file__).split('.')[0]
+        grapher = Grapher(title)
 
         with open('./save/losses_'+stock_name+'.txt', 'w') as f:
-            # plt.axis([0, 10, 0, 1])
-            for e in range(EPISODES):
+            for e in range(EPISODES+1):
+                # Train
                 state = env.reset()
                 state = np.reshape(state, [1, state_size])
                 for time in range(500):
@@ -114,8 +121,10 @@ if __name__ == '__main__':
                     next_state, reward, done, _ = env.step(action)
                     next_state = np.reshape(next_state, [1, state_size])
                     agent.remember(state, action, reward, next_state, done)
-                    agent.train(state, action, reward, next_state, done)
-                    if e % 25 == 0:
+                    # agent.train(state, action, reward, next_state, done)
+                    if len(agent.memory) > batch_size:
+                        agent.replay(batch_size)
+                    if e % 2 == 0:
                         #cash, nown, price = state[0, 1], state[0, 2], state[0, -1]
                         # cash, nown, price = *env.holdings, state[0,-1]
                         grapher.add(cash, nown, price, action, reward, loss=agent.loss)
@@ -130,17 +139,30 @@ if __name__ == '__main__':
                         f.write(str(agent.loss)+'\n')
                         f.flush()
                         agent.loss = 0
-                        if e % 25 == 0:
-                            grapher.show(ep=e, t=time, e=agent.epsilon)
+                        if e % 2 == 0:
+                            grapher.show(action_labels=env.action_labels, ep=e, t=time, e=agent.epsilon)
                             grapher.reset()
                             agent.save(save_string)
                         break
                     # if len(agent.memory) > batch_size:
                     #     agent.replay(batch_size)
 
+                # Test
+                if e % 2 == 0:
+                    state = test_env.reset()
+                    state = np.reshape(state, [1, state_size])
+                    for time in range(500):
+                        cash, nown, price = test_env.holdings[0], test_env.holdings[1], test_env.state[-1]
+                        action = agent.act(state, time, is_test=True)
+                        next_state, reward, done, _ = test_env.step(action)
+                        next_state = np.reshape(next_state, [1, state_size])
 
-        #     plt.plot(losses)
-        #     plt.pause(0.05)
-        # plt.show()
+                        grapher.add(cash, nown, price, action, reward, loss=agent.loss)
+                        state = next_state
+
+                        if done:
+                            grapher.show(action_labels=test_env.action_labels, ep=e, t=time, e=agent.epsilon, te='st')
+                            grapher.reset()
+                            break
 
 

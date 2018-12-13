@@ -1,44 +1,32 @@
+import os
 import numpy as np
 import pandas as pd
 import gym
 
 from Model import Model
 from Trader import Trader
+from processor import Processor
 
+from grapher import Grapher
 from collections import deque
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 from keras.utils.vis_utils import plot_model
 
-class supervised_learning(Model):
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, average_precision_score, f1_score
 
-    def __init__(self, symbol, cash=10000, window=30, span=100, start=None):
-        self.stock_name = symbol
-        self.memory = deque(maxlen=2000)
-        self.cash = cash
-        self.holdings = [cash, 0]
-        self.span = span
-        self.window = window
-        self.start = start
-        self.learning_rate = 0.001
-        self.stock = pd.read_csv('data/'+symbol+'.us.csv')
-        self.state = None
+
+class NN(Model):
+    def __init__(self, input_dim, learning_rate=0.001):
+        self.input_dim = input_dim
+        self.learning_rate = learning_rate
         self.model = self._build_model()
-
-    def price(self):
-        return self.stock['Close'][self.today]
-
-    def history(self):
-        return self.stock['Close'][self.today-self.window:self.today].values
-
-    def net_worth(self):
-        return self.holdings[0] + self.holdings[1] * self.price()
 
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
         model = Sequential()
-        model.add(Dense(24, input_dim=self.window, activation='relu'))
+        model.add(Dense(24, input_dim=self.input_dim, activation='relu'))
         model.add(Dense(24, activation='relu'))
         # model.add(Dense(12, activation='relu'))
         # model.add(Dense(12, activation='relu'))
@@ -48,85 +36,98 @@ class supervised_learning(Model):
         # plot_model(model, to_file='model.png')
         return model
 
-    def observations(self, cash, nown, p):
-        flat_rate = 0 #5 dollars per transaction
-        percent_rate = 0# 0.5% fees
-        short_fee = 0  #per-day fees
-
-        cash_tot = cash + nown * p
-        n_short = np.floor(cash_tot/p)
-        n_long = n_short
-
-        # fee_short = int(nown == -n_short) * (flat_rate + abs(n_short - nown) * percent_rate)
-        # fee_long = int(nown == n_long) * (flat_rate + abs(n_long - nown) * percent_rate)
-        # while cash_tot-p*n_long-fee_long < 0:
-        #     n_long -= 1
-        #     fee_long = int(nown == n_long) * (flat_rate + abs(n_long - nown) * percent_rate)
-
-        fee_long = 0
-        fee_short = 0
-        return np.array([
-            [cash_tot-p*n_long-fee_long,     n_long], # LONG
-            [cash_tot+p*n_short-fee_short,  -n_short], # SHORT
-        ])
-
-    def train(self, epoch):
-        print('training on', self.stock_name)
-        for i in range(epoch):
-            print('Training {}/{}'.format(i, epoch))
-            self.reset()
-            for _ in range(self.end - self.start + 1):
-                self.today += 1
-                target = self.price().reshape(1, 1)
-                state = np.reshape(self.state, [1, len(self.state)])
-                self.model.fit(state, target , epochs=1, verbose=0)
-                self.state = self.history()
-                
-
-    def trade(self):
-        self.reset()
-        self.today = np.random.randint(self.window, self.stock.shape[0]-self.span)
-        for i in range(self.span):
-            self.state = self.history()
-            state = np.reshape(self.state, [1, len(self.state)])
-            predict_price = self.model.predict(state)
-            if predict_price >= self.price():
-                self.holdings = self.observations(*self.holdings, self.price())[0]
-                action = 'long'
-            else:
-                self.holdings = self.observations(*self.holdings, self.price())[1]
-                action = 'short'
-            print('today_price', self.price(), 'predict_price', predict_price, \
-                'holding', self.holdings, 'action:', action, 'net_worth:', self.net_worth())
-        
-            self.today += 1
-        return self.net_worth()
-
-    def reset(self):
-        self.start = self.window
-        self.today = self.start
-        self.end = self.stock.shape[0]-self.span
-        self.state = self.history()
-        # self.model = self._build_model()
-        return self.state
-
     def load(self, name):
         self.model.load_weights(name)
 
     def save(self, name):
         self.model.save_weights(name)
 
+class NN12(NN):
+    def _build_model(self):
+        # Neural Net for Deep-Q learning Model
+        model = Sequential()
+        model.add(Dense(12, input_dim=self.input_dim, activation='relu'))
+        model.add(Dense(12, activation='relu'))
+        model.add(Dense(12, activation='relu'))
+        model.add(Dense(12, activation='relu'))
+        model.add(Dense(12, activation='relu'))
+        model.add(Dense(12, activation='relu'))
+        model.add(Dense(1, activation='linear'))
+        model.compile(loss='mse',
+                      optimizer=Adam(lr=self.learning_rate))
+        # plot_model(model, to_file='model.png')
+        return model
+
+class NN24(NN):
+    def _build_model(self):
+        # Neural Net for Deep-Q learning Model
+        model = Sequential()
+        model.add(Dense(24, input_dim=self.input_dim, activation='relu'))
+        model.add(Dense(24, activation='relu'))
+        model.add(Dense(24, activation='relu'))
+        model.add(Dense(24, activation='relu'))
+        model.add(Dense(24, activation='relu'))
+        model.add(Dense(24, activation='relu'))
+        model.add(Dense(1, activation='linear'))
+        model.compile(loss='mse',
+                      optimizer=Adam(lr=self.learning_rate))
+        # plot_model(model, to_file='model.png')
+        return model
+
+
+# if __name__ == "__main__":
+#     stock_name = 'sine_50days'
+#     trader = NN(stock_name)
+#     save_string = './save/supervised' + stock_name +'.h5'
+#     trader.load(save_string)
+#     #trader.train(50)
+#     final_net_worth = trader.trade()
+#     trader.save(save_string)
+#     print("final_net_worth = ", final_net_worth)
+
+EPISODES = 2000
 
 if __name__ == "__main__":
-    stock_name = 'sine_50days'
-    trader = supervised_learning(stock_name)
-    save_string = './save/supervised' + stock_name +'.h5'
-    trader.load(save_string)
-    #trader.train(50)
-    final_net_worth = trader.trade()
-    trader.save(save_string)
-    print("final_net_worth = ", final_net_worth)
+    stock_name = 'amzn'
+    stock = pd.read_csv('data/'+stock_name+'.us.csv')
 
+    span = 300
+    window = 100
+    proc = Processor(stock, window=window)
+    x_test, y_test = proc.run(span=span, start=stock.shape[0]-3*span-1)
 
+    input_dim = proc.window
+    models = {'NN24x6': NN24(input_dim)}
+    # modes = {'buy-sell': ['BUY', 'HOLD', 'SELL'], 'long-short': ['LONG', 'SHORT']}
+    modes = {'long-short': ['LONG', 'SHORT']}
 
+    for name, model in models.items():
+        title = stock_name.upper()+' '+name
+        grapher = Grapher(title)
+        with open(title.lower().replace(' ', '_')+'.txt', 'w') as f:
+            for e in range(EPISODES+1):
+                x_train, y_train = proc.run(span=span)
 
+                model.model.fit(x_train, y_train)
+                y_pred = model.model.predict(x_test)
+
+                prev_prices, prices, pred = x_test[:, -1], y_test, y_pred.reshape(y_pred.shape[0])
+                if e % 100 == 0:
+                    for mode, action_labels in modes.items():
+                        trader = Trader(mode)
+                        strategy = trader.to_strategy(prev_prices, pred)
+                        optimal = trader.to_strategy(prev_prices, prices)
+                        trader.run(strategy, prices, grapher=grapher)
+
+                        # f.write('{} accuracy_score={} balanced_accuracy_score={} average_precision_score={} f1_score={}\n'.format(
+                        #     e,
+                        #     accuracy_score(strategy, optimal),
+                        #     balanced_accuracy_score(strategy, optimal),
+                        #     average_precision_score(strategy, optimal),
+                        #     f1_score(strategy, optimal)))
+
+                        grapher.action_labels = action_labels
+                        grapher.pred = pred[:-1]
+
+                        grapher.show(action_labels=action_labels, ep=e, span=span, w=window, mode=trader.mode)
+                        grapher.reset()

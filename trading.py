@@ -43,7 +43,7 @@ class Trading(Env):
     def __init__(self, symbol, cash=10000, window=30, span=300, start=None):
         self.symbol = symbol
         self.stock = pd.read_csv('data/'+symbol+'.us.csv')
-        self.init = {'span': span, 'cash': cash}
+        self.init = {'span': span, 'cash': cash, 'start':start}
         self.window = window
 
         self.action_labels = ['BUY', 'HOLD', 'SELL']
@@ -112,7 +112,7 @@ class Trading(Env):
         self.i = self.init['span']
         self.holdings = np.array([self.init['cash'], 0])
 
-        self.start = np.random.randint(self.window, self.stock.shape[0]-self.init['span'])
+        self.start = self.init['start'] or np.random.randint(self.window, self.stock.shape[0]-3*self.init['span']-1)
         self.state = self.get_state()
         return self.state
 

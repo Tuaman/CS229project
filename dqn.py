@@ -11,17 +11,21 @@ from keras.utils.vis_utils import plot_model
 EPISODES = 30
 
 class DQNAgent:
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size, action_size, model_replay=None):
         self.state_size = state_size
         self.action_size = action_size
         self.memory = deque(maxlen=2000)
         self.gamma = 0.9   # discount rate
         self.epsilon = 1.0 # exploration rate
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.99995
+        self.epsilon_decay = 0.9999999
         self.learning_rate = 0.0001
-        self.model = self._build_model()
         self.loss = 0
+
+        self.weights_name = "_tmp_model_weights" + str(int(np.floor(np.random.rand()*100)))
+        self.model = self._build_model()
+        self.model_replay = self._build_model()
+        self.duplicate(self.model, self.model_replay)
 
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
@@ -41,21 +45,21 @@ class DQNAgent:
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
 
-    def act(self, state, i = None):
-        if np.random.rand() <= self.epsilon:
+    def act(self, state, i = None, is_test=False):
+        if not is_test and np.random.rand() <= self.epsilon:
             return random.randrange(self.action_size)
         act_values = self.model.predict(state)
         if i is not None and i % 20 == 0:
             print(act_values)
         return np.argmax(act_values[0])  # returns action
 
-    def replay(self, batch_size):
+    def replay(self, batch_size, update_model_replay=True):
         minibatch = random.sample(self.memory, batch_size)
         for state, action, reward, next_state, done in minibatch:
             target = reward
             if not done:
                 target = (reward + self.gamma *
-                          np.amax(self.model.predict(next_state)[0]))
+                          np.amax(self.model_replay.predict(next_state)[0]))
             target_f = self.model.predict(state)
             predict = target_f[0][action]
             target_f[0][action] = target
@@ -63,6 +67,8 @@ class DQNAgent:
             #self.loss += (predict - target)**2
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+        if update_model_replay:
+            self.duplicate(self.model, self.model_replay)
 
     def train(self, state, action, reward, next_state, done):
         #target = reward
@@ -77,7 +83,9 @@ class DQNAgent:
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-    def test(self):
+    def duplicate(self, from_model, to_model):
+        from_model.save_weights(self.weights_name)
+        to_model.load_weights(self.weights_name)
 
     def load(self, name):
         self.model.load_weights(name)

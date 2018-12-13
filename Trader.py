@@ -2,31 +2,70 @@ import numpy as np
 import pandas as pd
 
 class Trader:
-    BUY = 1
-    SELL = -1
+    def __init__(self, mode='buy-sell'):
+        self.mode = mode
 
-    def __init__(self, stock):
-        self.stock = stock
+    BUY, LONG   = 0, 0
+    HOLD, SHORT = 1, 1
+    SELL        = 2
+    def to_strategy(self, prev_price, prices):
+        strategy = np.zeros(prices.shape[0], dtype=int)
+        if self.mode == 'buy-sell':
+            strategy[prev_price < prices] = Trader.BUY
+            strategy[prev_price == prices] = Trader.HOLD
+            strategy[prev_price > prices] = Trader.SELL
+        else:
+            strategy[prev_price <= prices] = Trader.LONG
+            strategy[prev_price > prices] = Trader.SHORT
 
-    def run(self, strategy, cash=10000, span=None):
-        if span is None:
-            span = len(strategy)
+        return strategy
+
+    def long_short(self, cash, nown, p):
+        flat_rate = 0 #5 dollars per transaction
+        percent_rate = 0 # 0.5% fees
+        short_fee = 0  #per-day fees
+
+        cash_tot = cash + nown * p
+        n_short = np.floor(cash_tot/p)
+        n_long = n_short
+
+        # fee_short = int(nown == -n_short) * (flat_rate + abs(n_short - nown) * percent_rate)
+        # fee_long = int(nown == n_long) * (flat_rate + abs(n_long - nown) * percent_rate)
+        # while cash_tot-p*n_long-fee_long < 0:
+        #     n_long -= 1
+        #     fee_long = int(nown == n_long) * (flat_rate + abs(n_long - nown) * percent_rate)
+
+        fee_long = 0
+        fee_short = 0
+        return np.array([
+            [cash_tot-p*n_long-fee_long,     n_long], # LONG
+            [cash_tot+p*n_short-fee_short,  -n_short], # SHORT
+        ])
+
+    def buy_sell(self, cash, nown, p):
+        n = np.floor(cash/p)
+        return np.array([
+            [cash-p*n,      nown+n], # BUY
+            [cash,          nown],   # HOLD
+            [cash+p*nown, 0],        # SELL
+        ])
+
+    def run(self, strategy, prices, cash=10000, grapher=None):
+        observations = self.buy_sell if self.mode == 'buy-sell' else self.long_short
 
         stock_owned = 0
-        for i in range(-span, 0):
-            price = self.stock['Close'][self.stock.shape[0]+i]
-            if strategy[i] == Trader.BUY:
-                num_stock = np.floor(cash/price)
-                cash -= num_stock * price
-                stock_owned += num_stock
-            elif strategy[i] == Trader.SELL:
-                cash += stock_owned * price
-                stock_owned = 0
-        # print(cash, stock_owned, self.stock['Close'][self.stock.shape[0]-1], self.stock['Close'][self.stock.shape[0]+i], i, self.stock.shape[0]+i, self.net_total(cash, stock_owned))
-        return self.net_total(cash, stock_owned)
+        for i in range(strategy.shape[0]-1):
+            prev_cash, prev_nown = cash, stock_owned
+            cash, stock_owned = observations(cash, stock_owned, prices[i])[strategy[i]]
 
-    def net_total(self, cash, stock_owned):
-        return cash + stock_owned * self.stock['Close'][self.stock.shape[0]-1]
+            if grapher:
+                reward = self.eval(cash, stock_owned, prices[i+1]) - self.eval(prev_cash, prev_nown, prices[i])
+                grapher.add(prev_cash, prev_nown, prices[i], strategy[i], reward)
+
+        return self.eval(cash, stock_owned, prices[-1])
+
+    def eval(self, cash, stock_owned, price):
+        return cash + stock_owned * price
 
     def buy_once_and_hold(self, buy_at=0):
         strategy = np.zeros(self.stock.shape[0])
